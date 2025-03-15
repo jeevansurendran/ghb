@@ -34,13 +34,20 @@ func marshalMessage(msg proto.Message) (any, error) {
 		return marshaledMessage, nil
 	}
 
+	protoKeys, err := jsonToProtoKeys(msg)
+	if err != nil {
+		return nil, err
+	}
 	response := make(map[string]interface{})
 	reflectedMessage := msg.ProtoReflect()
 	fields := reflectedMessage.Descriptor().Fields()
 
 	for i := 0; i < fields.Len(); i++ {
 		fd := fields.Get(i)
-		name := string(fd.Name())
+		name, ok := protoKeys[string(fd.Name())]
+		if !ok {
+			return nil, fmt.Errorf("key not found %v", fd.Name())
+		}
 
 		if fd.IsMap() {
 			mapValue := make(map[string]interface{})

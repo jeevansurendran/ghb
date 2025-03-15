@@ -147,6 +147,44 @@ message ReportRequest {
 }
 ```
 
+### Custom Marshaller Example
+
+Similarly, you can implement custom marshalling logic for your messages by implementing the `Marshaler` interface:
+
+```go
+// Implement the Marshaler interface
+func (t *TimeRange) MarshalGHB() (interface{}, error) {
+    // Format to "2023-01-01/2023-12-31" format
+    formattedTime := fmt.Sprintf("%s/%s", 
+        t.StartTime.Format("2006-01-02"),
+        t.EndTime.Format("2006-01-02"))
+    
+    return formattedTime, nil
+}
+```
+
+### JSON Field Names Example
+
+GHB allows you to customize the JSON field names used in serialization and deserialization:
+
+```protobuf
+message User {
+    string user_id = 1 [(ghb.api.field) = {json_name: "userId"}];
+    string first_name = 2 [(ghb.api.field) = {json_name: "firstName"}];
+    string last_name = 3 [(ghb.api.field) = {json_name: "lastName"}];
+}
+```
+
+This allows your HTTP API to use camelCase JSON naming convention while your protocol buffers follow snake_case convention. When this message is serialized to JSON, it will look like:
+
+```json
+{
+  "userId": "123",
+  "firstName": "John",
+  "lastName": "Doe"
+}
+```
+
 ### URL Parameters Example
 
 GHB automatically extracts URL parameters from the path:
@@ -171,6 +209,3 @@ When making a request to `/api/users/123/orders/456`, GHB will automatically pop
 - `user_id` with "123"
 - `order_id` with "456"
 
-## License
-
-[Add your license information here]
