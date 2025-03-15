@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package ghb.api;
+
+option go_package = "github.com/malayanand/ghb/api";
+
+import "google/protobuf/descriptor.proto";
+
+message HttpRule {
+  message HttpMethod {
+    enum Value {
+      UNSPECIFIED = 0;
+      GET = 1;
+      POST = 2;
+      HEAD = 3;
+    }
+  }
+  string path = 1;
+  HttpMethod.Value method = 2;
+}
+
+extend google.protobuf.MethodOptions { HttpRule http = 1000099; }
+
+message FieldRule {
+  string json_name = 1;
+}
+
+extend google.protobuf.FieldOptions { FieldRule field = 2000099; }
