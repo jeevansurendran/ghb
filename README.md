@@ -11,6 +11,26 @@ GHB is a lightweight Go package that allows you to expose gRPC services as HTTP 
 ```bash
 go get github.com/malayanand/ghb
 ```
+### Proto File Setup
+
+To use the HTTP annotations in your proto files, you'll need to include the `http.proto` file in your project. Add this to your project's `buf.yaml` or similar proto management configuration:
+
+```yaml
+deps:
+  - buf.build/malayanand/ghb
+```
+
+Or if you're using a traditional protobuf setup, ensure your proto file import path includes the path to ghb's proto files:
+
+```bash
+protoc --proto_path=/path/to/ghb/proto \
+       --proto_path=. \
+       --go_out=. \
+       --go-grpc_out=. \
+       your_service.proto
+```
+
+The `http.proto` file contains the necessary annotations for defining HTTP endpoints in your gRPC services.
 
 ## Usage
 
