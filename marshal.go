@@ -38,7 +38,7 @@ func marshalMessage(msg proto.Message) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	response := make(map[string]interface{})
+	response := make(map[string]any)
 	reflectedMessage := msg.ProtoReflect()
 	fields := reflectedMessage.Descriptor().Fields()
 
@@ -50,13 +50,13 @@ func marshalMessage(msg proto.Message) (any, error) {
 		}
 
 		if fd.IsMap() {
-			mapValue := make(map[string]interface{})
+			mapValue := make(map[string]any)
 			if err := marshalMap(fd, reflectedMessage, mapValue); err != nil {
 				return nil, err
 			}
 			response[name] = mapValue
 		} else if fd.IsList() {
-			listValue := make([]interface{}, 0)
+			listValue := make([]any, 0)
 			if err := marshalList(fd, reflectedMessage, listValue); err != nil {
 				return nil, err
 			}
@@ -83,7 +83,7 @@ func marshalMessage(msg proto.Message) (any, error) {
 	return response, nil
 }
 
-func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, value map[string]interface{}) error {
+func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, value map[string]any) error {
 	mp := reflectedMessage.Get(fd).Map()
 	var mapError error
 	mp.Range(func(k protoreflect.MapKey, v protoreflect.Value) bool {
@@ -103,7 +103,7 @@ func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.M
 	return mapError
 }
 
-func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, listValue []interface{}) error {
+func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, listValue []any) error {
 	list := reflectedMessage.Get(fd).List()
 	for i := 0; i < list.Len(); i++ {
 		item := list.Get(i)
@@ -121,12 +121,12 @@ func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.
 	return nil
 }
 
-func marshalField(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) interface{} {
+func marshalField(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) any {
 	value := reflectedMessage.Get(fd)
 	return valueToPrimitive(value, fd.Kind())
 }
 
-func valueToPrimitive(value protoreflect.Value, kind protoreflect.Kind) interface{} {
+func valueToPrimitive(value protoreflect.Value, kind protoreflect.Kind) any {
 	switch kind {
 	case protoreflect.BoolKind:
 		return value.Bool()
