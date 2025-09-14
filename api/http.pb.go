@@ -7,12 +7,11 @@
 package api
 
 import (
-	reflect "reflect"
-	sync "sync"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
+	reflect "reflect"
+	sync "sync"
 )
 
 const (
@@ -292,7 +291,7 @@ func file_http_proto_rawDescGZIP() []byte {
 
 var file_http_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_http_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_http_proto_goTypes = []any{
+var file_http_proto_goTypes = []interface{}{
 	(HttpRule_HttpMethod_Value)(0),     // 0: ghb.api.HttpRule.HttpMethod.Value
 	(*HttpRule)(nil),                   // 1: ghb.api.HttpRule
 	(*FieldRule)(nil),                  // 2: ghb.api.FieldRule
@@ -319,7 +318,7 @@ func file_http_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_http_proto_msgTypes[0].Exporter = func(v any, i int) any {
+		file_http_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*HttpRule); i {
 			case 0:
 				return &v.state
@@ -331,7 +330,7 @@ func file_http_proto_init() {
 				return nil
 			}
 		}
-		file_http_proto_msgTypes[1].Exporter = func(v any, i int) any {
+		file_http_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*FieldRule); i {
 			case 0:
 				return &v.state
@@ -343,7 +342,7 @@ func file_http_proto_init() {
 				return nil
 			}
 		}
-		file_http_proto_msgTypes[2].Exporter = func(v any, i int) any {
+		file_http_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*HttpRule_HttpMethod); i {
 			case 0:
 				return &v.state

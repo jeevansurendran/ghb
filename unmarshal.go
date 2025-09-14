@@ -15,18 +15,18 @@ type Unmarshaler interface {
 }
 
 func unmarshalBytes(bytes []byte, msg proto.Message, params map[string]string) error {
-	var value map[string]any
-	if bytes != nil {
-		err := json.Unmarshal(bytes, &value)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal request body: %v", err)
-		}
-	}
+	value := map[string]any{}
 	for k, v := range params {
 		if existing, ok := value[k]; ok {
 			return fmt.Errorf("parameter conflict: %q already exists with value %v", k, existing)
 		}
 		value[k] = v
+	}
+	if bytes != nil {
+		err := json.Unmarshal(bytes, &value)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal request body: %v", err)
+		}
 	}
 	return unmarshalMessage(msg, value)
 }
