@@ -134,7 +134,7 @@ type TimeRange struct {
 }
 
 // Implement the Unmarshaler interface
-func (t *TimeRange) UnmarshalGHB(data interface{}) error {
+func (t *TimeRange) UnmarshalGHB(data any) error {
     timeStr, ok := data.(string)
     if !ok {
         return fmt.Errorf("expected string, got %T", data)
@@ -173,7 +173,7 @@ Similarly, you can implement custom marshalling logic for your messages by imple
 
 ```go
 // Implement the Marshaler interface
-func (t *TimeRange) MarshalGHB() (interface{}, error) {
+func (t *TimeRange) MarshalGHB() (any, error) {
     // Format to "2023-01-01/2023-12-31" format
     formattedTime := fmt.Sprintf("%s/%s", 
         t.StartTime.Format("2006-01-02"),

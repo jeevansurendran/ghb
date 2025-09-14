@@ -3,6 +3,7 @@ package ghb
 import (
 	"testing"
 
+	"github.com/malayanand/ghb/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,6 +75,57 @@ func Test_extractURLParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actual, _ := extractURLParams(tt.pattern, tt.path)
 			require.Equal(t, actual, tt.expected)
+		})
+	}
+}
+
+func Test_unmarshalBytes(t *testing.T) {
+	tests := []struct {
+		name     string
+		bytes    []byte
+		params   map[string]string
+		expected *test.TestUser
+		isErr    bool
+	}{
+		{
+			name:  "when bytes are provided",
+			bytes: []byte(`{"id": "123"}`),
+			expected: &test.TestUser{
+				Id: "123",
+			},
+		},
+		{
+			name:  "when params are provided",
+			bytes: nil,
+			params: map[string]string{
+				"id": "123",
+			},
+			expected: &test.TestUser{
+				Id: "123",
+			},
+		},
+		{
+			name:  "when bytes and params are provided",
+			bytes: []byte(`{"id": "123", "name": "John Doe", "age": 30}`),
+			params: map[string]string{
+				"id": "123456",
+			},
+			expected: &test.TestUser{
+				Id:   "123", // should be overridden by the param.
+				Name: "John Doe",
+				Age:  30,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := &test.TestUser{}
+			err := unmarshalBytes(tt.bytes, actual, tt.params)
+			if tt.isErr {
+				require.Error(t, err)
+				return
+			}
+			require.EqualExportedValues(t, tt.expected, actual)
 		})
 	}
 }

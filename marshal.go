@@ -3,6 +3,7 @@ package ghb
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -15,7 +16,7 @@ type Marshaler interface {
 func marshalBytes(msg any) ([]byte, error) {
 	protoMsg, ok := msg.(proto.Message)
 	if !ok {
-		return nil, fmt.Errorf("Wrong type %T, expected proto message", protoMsg)
+		return nil, fmt.Errorf("wrong type %T, expected proto message", protoMsg)
 	}
 	response, err := marshalMessage(protoMsg)
 	if err != nil {
@@ -26,6 +27,9 @@ func marshalBytes(msg any) ([]byte, error) {
 }
 
 func marshalMessage(msg proto.Message) (any, error) {
+	if isNil(msg) {
+		return nil, nil
+	}
 	if marshalable, ok := msg.ProtoReflect().Interface().(Marshaler); ok {
 		marshaledMessage, err := marshalable.MarshalGHB()
 		if err != nil {
@@ -38,7 +42,7 @@ func marshalMessage(msg proto.Message) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	response := make(map[string]interface{})
+	response := make(map[string]any)
 	reflectedMessage := msg.ProtoReflect()
 	fields := reflectedMessage.Descriptor().Fields()
 
@@ -48,43 +52,40 @@ func marshalMessage(msg proto.Message) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("key not found %v", fd.Name())
 		}
-
 		if fd.IsMap() {
-			mapValue := make(map[string]interface{})
-			if err := marshalMap(fd, reflectedMessage, mapValue); err != nil {
+			mapValue, err := marshalMap(fd, reflectedMessage)
+			if err != nil {
 				return nil, err
 			}
 			response[name] = mapValue
 		} else if fd.IsList() {
-			listValue := make([]interface{}, 0)
-			if err := marshalList(fd, reflectedMessage, listValue); err != nil {
+			listValue, err := marshalList(fd, reflectedMessage)
+			if err != nil {
 				return nil, err
 			}
 			response[name] = listValue
 		} else if fd.Kind() == protoreflect.MessageKind {
 			nestedMsg := reflectedMessage.Get(fd).Message().Interface()
-			if marshalable, ok := nestedMsg.(Marshaler); ok {
-				marshaledMessage, err := marshalable.MarshalGHB()
-				if err != nil {
-					return nil, err
-				}
-				response[name] = marshaledMessage
-			} else {
-				nestedValue, err := marshalMessage(nestedMsg)
-				if err != nil {
-					return nil, err
-				}
-				response[name] = nestedValue
+			nestedValue, err := marshalMessage(nestedMsg)
+			if err != nil {
+				return nil, err
 			}
+			response[name] = nestedValue
 		} else {
 			response[name] = marshalField(fd, reflectedMessage)
+		}
+		// TODO: handle required vs optional fields,
+		// for now remove all the fields that are nil
+		if response[name] == nil {
+			delete(response, name)
 		}
 	}
 	return response, nil
 }
 
-func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, value map[string]interface{}) error {
+func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) (map[string]any, error) {
 	mp := reflectedMessage.Get(fd).Map()
+	value := make(map[string]any, mp.Len())
 	var mapError error
 	mp.Range(func(k protoreflect.MapKey, v protoreflect.Value) bool {
 		// different type of value
@@ -100,33 +101,38 @@ func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.M
 		}
 		return true
 	})
-	return mapError
+	return value, mapError
 }
 
-func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, listValue []interface{}) error {
+func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) ([]any, error) {
 	list := reflectedMessage.Get(fd).List()
+	listValue := make([]any, list.Len())
 	for i := 0; i < list.Len(); i++ {
 		item := list.Get(i)
 		if fd.Kind() == protoreflect.MessageKind {
 			nestedValue, err := marshalMessage(item.Message().Interface())
 			if err != nil {
-				return err
+				return nil, err
 			}
-			listValue = append(listValue, nestedValue)
+			listValue[i] = nestedValue
 		} else {
 			// For primitive types
-			listValue = append(listValue, valueToPrimitive(item, fd.Kind()))
+			listValue[i] = valueToPrimitive(item, fd.Kind())
 		}
 	}
-	return nil
+	return listValue, nil
 }
 
-func marshalField(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) interface{} {
+func isNil(msg proto.Message) bool {
+	return msg == nil || reflect.ValueOf(msg).IsNil()
+}
+
+func marshalField(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) any {
 	value := reflectedMessage.Get(fd)
 	return valueToPrimitive(value, fd.Kind())
 }
 
-func valueToPrimitive(value protoreflect.Value, kind protoreflect.Kind) interface{} {
+func valueToPrimitive(value protoreflect.Value, kind protoreflect.Kind) any {
 	switch kind {
 	case protoreflect.BoolKind:
 		return value.Bool()

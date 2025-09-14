@@ -3,6 +3,7 @@ package ghb
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/malayanand/ghb/api"
@@ -11,34 +12,36 @@ import (
 )
 
 type Unmarshaler interface {
-	UnmarshalGHB(data interface{}) error
+	UnmarshalGHB(data any) error
 }
 
 func unmarshalBytes(bytes []byte, msg proto.Message, params map[string]string) error {
-	var value map[string]interface{}
-	err := json.Unmarshal(bytes, &value)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal request body: %v", err)
-	}
+	value := map[string]any{}
 	for k, v := range params {
 		if existing, ok := value[k]; ok {
 			return fmt.Errorf("parameter conflict: %q already exists with value %v", k, existing)
 		}
 		value[k] = v
 	}
+	if bytes != nil {
+		err := json.Unmarshal(bytes, &value)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal request body: %v", err)
+		}
+	}
 	return unmarshalMessage(msg, value)
 }
 
-func unmarshalMessage(msg proto.Message, value interface{}) error {
+func unmarshalMessage(msg proto.Message, value any) error {
 	if unmarshalable, ok := msg.ProtoReflect().Interface().(Unmarshaler); ok {
 		if err := unmarshalable.UnmarshalGHB(value); err != nil {
 			return err
 		}
 		return nil
 	}
-	objectValue, ok := value.(map[string]interface{})
+	objectValue, ok := value.(map[string]any)
 	if !ok {
-		return fmt.Errorf("expected map[string]interface{}, got %T", value)
+		return fmt.Errorf("expected map[string]any, got %T", value)
 	}
 
 	keysMap, err := jsonToProtoKeys(msg)
@@ -89,8 +92,8 @@ func unmarshalMessage(msg proto.Message, value interface{}) error {
 	return nil
 }
 
-func unmarshalMap(fd protoreflect.FieldDescriptor, msg proto.Message, value interface{}) error {
-	mapValue, ok := value.(map[string]interface{})
+func unmarshalMap(fd protoreflect.FieldDescriptor, msg proto.Message, value any) error {
+	mapValue, ok := value.(map[string]any)
 	if !ok {
 		return fmt.Errorf("expected map for field %s, got %T", fd.Name(), value)
 	}
@@ -117,8 +120,8 @@ func unmarshalMap(fd protoreflect.FieldDescriptor, msg proto.Message, value inte
 	return nil
 }
 
-func unmarshalList(fd protoreflect.FieldDescriptor, msg proto.Message, value interface{}) error {
-	listValue, ok := value.([]interface{})
+func unmarshalList(fd protoreflect.FieldDescriptor, msg proto.Message, value any) error {
+	listValue, ok := value.([]any)
 	if !ok {
 		return fmt.Errorf("expected list for field %s, got %T", fd.Name(), value)
 	}
@@ -138,7 +141,7 @@ func unmarshalList(fd protoreflect.FieldDescriptor, msg proto.Message, value int
 	return nil
 }
 
-func unmarshalField(fd protoreflect.FieldDescriptor, msg proto.Message, value interface{}) error {
+func unmarshalField(fd protoreflect.FieldDescriptor, msg proto.Message, value any) error {
 	scalarVal, err := scalarValue(fd, value)
 	if err != nil {
 		return err
@@ -147,7 +150,7 @@ func unmarshalField(fd protoreflect.FieldDescriptor, msg proto.Message, value in
 	return nil
 }
 
-func scalarValue(fd protoreflect.FieldDescriptor, v interface{}) (protoreflect.Value, error) {
+func scalarValue(fd protoreflect.FieldDescriptor, v any) (protoreflect.Value, error) {
 	switch fd.Kind() {
 	case protoreflect.BoolKind:
 		return protoreflect.ValueOfBool(v.(bool)), nil
@@ -197,8 +200,15 @@ func extractURLParams(pattern, path string) (map[string]string, error) {
 			paramName := patternPart[1 : len(patternPart)-1]
 			params[paramName] = pathParts[i]
 		} else if patternPart != pathParts[i] {
-			return nil, fmt.Errorf("Http url pattern %v, and path params %v do not match", patternPart, pathParts[i])
+			return nil, fmt.Errorf("http url pattern %v, and path params %v do not match", patternPart, pathParts[i])
 		}
+	}
+	for key, value := range params {
+		tmp, err := url.PathUnescape(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unescape path param %s: %v", key, err)
+		}
+		params[key] = tmp
 	}
 	return params, nil
 }
