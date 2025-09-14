@@ -27,10 +27,10 @@ func marshalBytes(msg any) ([]byte, error) {
 }
 
 func marshalMessage(msg proto.Message) (any, error) {
+	if isNil(msg) {
+		return nil, nil
+	}
 	if marshalable, ok := msg.ProtoReflect().Interface().(Marshaler); ok {
-		if marshalable == nil || reflect.ValueOf(marshalable).IsNil() {
-			return nil, nil
-		}
 		marshaledMessage, err := marshalable.MarshalGHB()
 		if err != nil {
 			return nil, err
@@ -52,16 +52,15 @@ func marshalMessage(msg proto.Message) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("key not found %v", fd.Name())
 		}
-
 		if fd.IsMap() {
-			mapValue := make(map[string]any)
-			if err := marshalMap(fd, reflectedMessage, mapValue); err != nil {
+			mapValue, err := marshalMap(fd, reflectedMessage)
+			if err != nil {
 				return nil, err
 			}
 			response[name] = mapValue
 		} else if fd.IsList() {
-			listValue := make([]any, 0)
-			if err := marshalList(fd, reflectedMessage, listValue); err != nil {
+			listValue, err := marshalList(fd, reflectedMessage)
+			if err != nil {
 				return nil, err
 			}
 			response[name] = listValue
@@ -75,12 +74,18 @@ func marshalMessage(msg proto.Message) (any, error) {
 		} else {
 			response[name] = marshalField(fd, reflectedMessage)
 		}
+		// TODO: handle required vs optional fields,
+		// for now remove all the fields that are nil
+		if response[name] == nil {
+			delete(response, name)
+		}
 	}
 	return response, nil
 }
 
-func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, value map[string]any) error {
+func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) (map[string]any, error) {
 	mp := reflectedMessage.Get(fd).Map()
+	value := make(map[string]any, mp.Len())
 	var mapError error
 	mp.Range(func(k protoreflect.MapKey, v protoreflect.Value) bool {
 		// different type of value
@@ -96,25 +101,30 @@ func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.M
 		}
 		return true
 	})
-	return mapError
+	return value, mapError
 }
 
-func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, listValue []any) error {
+func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) ([]any, error) {
 	list := reflectedMessage.Get(fd).List()
+	listValue := make([]any, list.Len())
 	for i := 0; i < list.Len(); i++ {
 		item := list.Get(i)
 		if fd.Kind() == protoreflect.MessageKind {
 			nestedValue, err := marshalMessage(item.Message().Interface())
 			if err != nil {
-				return err
+				return nil, err
 			}
-			listValue = append(listValue, nestedValue)
+			listValue[i] = nestedValue
 		} else {
 			// For primitive types
-			listValue = append(listValue, valueToPrimitive(item, fd.Kind()))
+			listValue[i] = valueToPrimitive(item, fd.Kind())
 		}
 	}
-	return nil
+	return listValue, nil
+}
+
+func isNil(msg proto.Message) bool {
+	return msg == nil || reflect.ValueOf(msg).IsNil()
 }
 
 func marshalField(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) any {
