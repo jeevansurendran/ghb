@@ -16,9 +16,11 @@ type Unmarshaler interface {
 
 func unmarshalBytes(bytes []byte, msg proto.Message, params map[string]string) error {
 	var value map[string]any
-	err := json.Unmarshal(bytes, &value)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal request body: %v", err)
+	if bytes != nil {
+		err := json.Unmarshal(bytes, &value)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal request body: %v", err)
+		}
 	}
 	for k, v := range params {
 		if existing, ok := value[k]; ok {

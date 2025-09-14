@@ -142,7 +142,7 @@ func (s *Server) handleHttpRule(impl any, httpRule *api.HttpRule, methodHandler 
 			}
 			err = unmarshalBytes(body, msg, params)
 			if err != nil {
-				return fmt.Errorf("Failed to unmarshal request body: %v", err)
+				return fmt.Errorf("failed to unmarshal request body: %v", err)
 			}
 			return nil
 		}
