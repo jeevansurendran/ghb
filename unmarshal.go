@@ -3,6 +3,7 @@ package ghb
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/malayanand/ghb/api"
@@ -199,8 +200,15 @@ func extractURLParams(pattern, path string) (map[string]string, error) {
 			paramName := patternPart[1 : len(patternPart)-1]
 			params[paramName] = pathParts[i]
 		} else if patternPart != pathParts[i] {
-			return nil, fmt.Errorf("Http url pattern %v, and path params %v do not match", patternPart, pathParts[i])
+			return nil, fmt.Errorf("http url pattern %v, and path params %v do not match", patternPart, pathParts[i])
 		}
+	}
+	for key, value := range params {
+		tmp, err := url.PathUnescape(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unescape path param %s: %v", key, err)
+		}
+		params[key] = tmp
 	}
 	return params, nil
 }

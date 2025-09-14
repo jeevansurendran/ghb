@@ -3,6 +3,7 @@ package ghb
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -15,7 +16,7 @@ type Marshaler interface {
 func marshalBytes(msg any) ([]byte, error) {
 	protoMsg, ok := msg.(proto.Message)
 	if !ok {
-		return nil, fmt.Errorf("Wrong type %T, expected proto message", protoMsg)
+		return nil, fmt.Errorf("wrong type %T, expected proto message", protoMsg)
 	}
 	response, err := marshalMessage(protoMsg)
 	if err != nil {
@@ -27,6 +28,9 @@ func marshalBytes(msg any) ([]byte, error) {
 
 func marshalMessage(msg proto.Message) (any, error) {
 	if marshalable, ok := msg.ProtoReflect().Interface().(Marshaler); ok {
+		if marshalable == nil || reflect.ValueOf(marshalable).IsNil() {
+			return nil, nil
+		}
 		marshaledMessage, err := marshalable.MarshalGHB()
 		if err != nil {
 			return nil, err
@@ -63,19 +67,11 @@ func marshalMessage(msg proto.Message) (any, error) {
 			response[name] = listValue
 		} else if fd.Kind() == protoreflect.MessageKind {
 			nestedMsg := reflectedMessage.Get(fd).Message().Interface()
-			if marshalable, ok := nestedMsg.(Marshaler); ok {
-				marshaledMessage, err := marshalable.MarshalGHB()
-				if err != nil {
-					return nil, err
-				}
-				response[name] = marshaledMessage
-			} else {
-				nestedValue, err := marshalMessage(nestedMsg)
-				if err != nil {
-					return nil, err
-				}
-				response[name] = nestedValue
+			nestedValue, err := marshalMessage(nestedMsg)
+			if err != nil {
+				return nil, err
 			}
+			response[name] = nestedValue
 		} else {
 			response[name] = marshalField(fd, reflectedMessage)
 		}
