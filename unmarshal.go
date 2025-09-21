@@ -9,13 +9,18 @@ import (
 	"github.com/malayanand/ghb/api"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Unmarshaler interface {
 	UnmarshalGHB(data any) error
 }
 
-func unmarshalBytes(bytes []byte, msg proto.Message, params map[string]string) error {
+type unmarshalOptions struct {
+	timeFormat *timeFormat
+}
+
+func unmarshalBytes(bytes []byte, msg proto.Message, params map[string]string, options *unmarshalOptions) error {
 	value := map[string]any{}
 	for k, v := range params {
 		if existing, ok := value[k]; ok {
@@ -29,10 +34,10 @@ func unmarshalBytes(bytes []byte, msg proto.Message, params map[string]string) e
 			return fmt.Errorf("failed to unmarshal request body: %v", err)
 		}
 	}
-	return unmarshalMessage(msg, value)
+	return unmarshalMessage(msg, value, options)
 }
 
-func unmarshalMessage(msg proto.Message, value any) error {
+func unmarshalMessage(msg proto.Message, value any, options *unmarshalOptions) error {
 	if unmarshalable, ok := msg.ProtoReflect().Interface().(Unmarshaler); ok {
 		if err := unmarshalable.UnmarshalGHB(value); err != nil {
 			return err
@@ -62,24 +67,31 @@ func unmarshalMessage(msg proto.Message, value any) error {
 			return fmt.Errorf("field descriptor for %s not found", protoKey)
 		}
 		if fd.IsMap() {
-			if err := unmarshalMap(fd, msg, v); err != nil {
+			if err := unmarshalMap(fd, msg, v, options); err != nil {
 				return err
 			}
 			continue
 		} else if fd.IsList() {
-			if err := unmarshalList(fd, msg, v); err != nil {
+			if err := unmarshalList(fd, msg, v, options); err != nil {
 				return err
 			}
 			continue
 		} else if fd.Kind() == protoreflect.MessageKind {
-			val := reflectedMessage.Mutable(fd).Message().Interface()
-			if unmarshalable, ok := val.(Unmarshaler); ok {
-				if err := unmarshalable.UnmarshalGHB(v); err != nil {
+			message := reflectedMessage.Mutable(fd).Message().Interface()
+			switch val := message.(type) {
+			case Unmarshaler:
+				err := val.UnmarshalGHB(v)
+				if err != nil {
 					return err
 				}
-			} else {
-				// Default to unmarshalling the message.
-				if err := unmarshalMessage(val, v); err != nil {
+			case *timestamppb.Timestamp:
+				timestamp, err := options.timeFormat.unmarshal(v)
+				if err != nil {
+					return err
+				}
+				reflectedMessage.Set(fd, protoreflect.ValueOf(timestamp.ProtoReflect()))
+			default:
+				if err := unmarshalMessage(val, v, options); err != nil {
 					return err
 				}
 			}
@@ -92,7 +104,7 @@ func unmarshalMessage(msg proto.Message, value any) error {
 	return nil
 }
 
-func unmarshalMap(fd protoreflect.FieldDescriptor, msg proto.Message, value any) error {
+func unmarshalMap(fd protoreflect.FieldDescriptor, msg proto.Message, value any, options *unmarshalOptions) error {
 	mapValue, ok := value.(map[string]any)
 	if !ok {
 		return fmt.Errorf("expected map for field %s, got %T", fd.Name(), value)
@@ -101,11 +113,11 @@ func unmarshalMap(fd protoreflect.FieldDescriptor, msg proto.Message, value any)
 	for k, v := range mapValue {
 		val := mp.NewValue()
 		if fd.IsList() {
-			if err := unmarshalList(fd, msg, v); err != nil {
+			if err := unmarshalList(fd, msg, v, options); err != nil {
 				return err
 			}
 		} else if fd.Kind() == protoreflect.MessageKind {
-			if err := unmarshalMessage(val.Message().Interface(), v); err != nil {
+			if err := unmarshalMessage(val.Message().Interface(), v, options); err != nil {
 				return err
 			}
 		} else {
@@ -120,7 +132,7 @@ func unmarshalMap(fd protoreflect.FieldDescriptor, msg proto.Message, value any)
 	return nil
 }
 
-func unmarshalList(fd protoreflect.FieldDescriptor, msg proto.Message, value any) error {
+func unmarshalList(fd protoreflect.FieldDescriptor, msg proto.Message, value any, options *unmarshalOptions) error {
 	listValue, ok := value.([]any)
 	if !ok {
 		return fmt.Errorf("expected list for field %s, got %T", fd.Name(), value)
@@ -129,7 +141,7 @@ func unmarshalList(fd protoreflect.FieldDescriptor, msg proto.Message, value any
 	for _, v := range listValue {
 		val := list.AppendMutable()
 		if fd.Kind() == protoreflect.MessageKind {
-			if err := unmarshalMessage(val.Message().Interface(), v); err != nil {
+			if err := unmarshalMessage(val.Message().Interface(), v, options); err != nil {
 				return err
 			}
 		} else {

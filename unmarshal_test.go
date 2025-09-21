@@ -2,9 +2,11 @@ package ghb
 
 import (
 	"testing"
+	"time"
 
 	"github.com/malayanand/ghb/test"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func Test_extractURLParams(t *testing.T) {
@@ -84,6 +86,7 @@ func Test_unmarshalBytes(t *testing.T) {
 		name     string
 		bytes    []byte
 		params   map[string]string
+		options  *unmarshalOptions
 		expected *test.TestUser
 		isErr    bool
 	}{
@@ -106,21 +109,25 @@ func Test_unmarshalBytes(t *testing.T) {
 		},
 		{
 			name:  "when bytes and params are provided",
-			bytes: []byte(`{"id": "123", "name": "John Doe", "age": 30}`),
+			bytes: []byte(`{"id": "123", "name": "John Doe", "age": 30, "created_at": "2025-09-21T11:32:03.000Z"}`),
 			params: map[string]string{
 				"id": "123456",
 			},
+			options: &unmarshalOptions{
+				timeFormat: ISOTimeFormat,
+			},
 			expected: &test.TestUser{
-				Id:   "123", // should be overridden by the param.
-				Name: "John Doe",
-				Age:  30,
+				Id:        "123", // should be overridden by the param.
+				Name:      "John Doe",
+				Age:       30,
+				CreatedAt: timestamppb.New(time.Unix(1758454323, 0)),
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actual := &test.TestUser{}
-			err := unmarshalBytes(tt.bytes, actual, tt.params)
+			err := unmarshalBytes(tt.bytes, actual, tt.params, tt.options)
 			if tt.isErr {
 				require.Error(t, err)
 				return
