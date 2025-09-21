@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"reflect"
+	"slices"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
@@ -24,7 +25,11 @@ type Server struct {
 	registerProtoErr  error
 	services          map[string]*serviceInfo
 	mux               *http.ServeMux
+
+	timeFormat *timeFormat
 }
+
+type ServerOption func(*Server)
 
 type serviceInfo struct {
 	impl    any
@@ -34,13 +39,29 @@ type serviceInfo struct {
 var (
 	registerServiceOnce sync.Once
 	registerServiceErr  error
-	httpRuleName        = "ghb.api.http"
 )
 
-func NewServer() *Server {
-	return &Server{
+func NewServer(opts ...ServerOption) *Server {
+	server := &Server{
 		services: make(map[string]*serviceInfo),
 		mux:      http.NewServeMux(),
+	}
+	options := slices.Concat(defaultServerOptions(), opts)
+	for _, opt := range options {
+		opt(server)
+	}
+	return server
+}
+
+func defaultServerOptions() []ServerOption {
+	return []ServerOption{
+		WithTimeFormat(ISOTimeFormat),
+	}
+}
+
+func WithTimeFormat(format *timeFormat) ServerOption {
+	return func(s *Server) {
+		s.timeFormat = format
 	}
 }
 
@@ -119,7 +140,11 @@ func (s *Server) registerService(service protoreflect.ServiceDescriptor) error {
 
 func (s *Server) handleHttpRule(impl any, httpRule *api.HttpRule, methodHandler grpc.MethodHandler) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		params, err := extractURLParams(httpRule.Path, r.URL.RawPath)
+		path := r.URL.EscapedPath()
+		if path == "" {
+			path = r.URL.Path
+		}
+		params, err := extractURLParams(httpRule.Path, path)
 		if err != nil {
 			badRequest(w, err)
 			return
@@ -140,7 +165,9 @@ func (s *Server) handleHttpRule(impl any, httpRule *api.HttpRule, methodHandler 
 					return err
 				}
 			}
-			err = unmarshalBytes(body, msg, params)
+			err = unmarshalBytes(body, msg, params, &unmarshalOptions{
+				timeFormat: s.timeFormat,
+			})
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal request body: %v", err)
 			}
@@ -152,7 +179,9 @@ func (s *Server) handleHttpRule(impl any, httpRule *api.HttpRule, methodHandler 
 			internalServerError(w, err)
 			return
 		}
-		body, err := marshalBytes(res)
+		body, err := marshalBytes(res, &marshalOptions{
+			timeFormat: s.timeFormat,
+		})
 		if err != nil {
 			internalServerError(w, err)
 			return

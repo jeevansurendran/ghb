@@ -3,9 +3,11 @@ syntax = "proto3";
 package ghb.test;
 
 option go_package = "github.com/malayanand/ghb/test";
+import "google/protobuf/timestamp.proto";
 
 message TestUser {
     string id = 1;
     string name = 2;
     int32 age = 3;
+    google.protobuf.Timestamp created_at = 4;
 }

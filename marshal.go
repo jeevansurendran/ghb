@@ -7,18 +7,23 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Marshaler interface {
 	MarshalGHB() (any, error)
 }
 
-func marshalBytes(msg any) ([]byte, error) {
+type marshalOptions struct {
+	timeFormat *timeFormat
+}
+
+func marshalBytes(msg any, options *marshalOptions) ([]byte, error) {
 	protoMsg, ok := msg.(proto.Message)
 	if !ok {
 		return nil, fmt.Errorf("wrong type %T, expected proto message", protoMsg)
 	}
-	response, err := marshalMessage(protoMsg)
+	response, err := marshalMessage(protoMsg, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response body: %v", msg)
 	}
@@ -26,16 +31,25 @@ func marshalBytes(msg any) ([]byte, error) {
 	return json.Marshal(response)
 }
 
-func marshalMessage(msg proto.Message) (any, error) {
+func marshalMessage(msg proto.Message, options *marshalOptions) (any, error) {
 	if isNil(msg) {
 		return nil, nil
 	}
-	if marshalable, ok := msg.ProtoReflect().Interface().(Marshaler); ok {
-		marshaledMessage, err := marshalable.MarshalGHB()
+	switch val := msg.ProtoReflect().Interface().(type) {
+	case Marshaler:
+		message, err := val.MarshalGHB()
 		if err != nil {
 			return nil, err
 		}
-		return marshaledMessage, nil
+		return message, nil
+	case *timestamppb.Timestamp:
+		message, err := options.timeFormat.marshal(val)
+		if err != nil {
+			return nil, err
+		}
+		return message, nil
+	default:
+		// Continue below.
 	}
 
 	protoKeys, err := jsonToProtoKeys(msg)
@@ -53,20 +67,20 @@ func marshalMessage(msg proto.Message) (any, error) {
 			return nil, fmt.Errorf("key not found %v", fd.Name())
 		}
 		if fd.IsMap() {
-			mapValue, err := marshalMap(fd, reflectedMessage)
+			mapValue, err := marshalMap(fd, reflectedMessage, options)
 			if err != nil {
 				return nil, err
 			}
 			response[name] = mapValue
 		} else if fd.IsList() {
-			listValue, err := marshalList(fd, reflectedMessage)
+			listValue, err := marshalList(fd, reflectedMessage, options)
 			if err != nil {
 				return nil, err
 			}
 			response[name] = listValue
 		} else if fd.Kind() == protoreflect.MessageKind {
 			nestedMsg := reflectedMessage.Get(fd).Message().Interface()
-			nestedValue, err := marshalMessage(nestedMsg)
+			nestedValue, err := marshalMessage(nestedMsg, options)
 			if err != nil {
 				return nil, err
 			}
@@ -83,14 +97,14 @@ func marshalMessage(msg proto.Message) (any, error) {
 	return response, nil
 }
 
-func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) (map[string]any, error) {
+func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, options *marshalOptions) (map[string]any, error) {
 	mp := reflectedMessage.Get(fd).Map()
 	value := make(map[string]any, mp.Len())
 	var mapError error
 	mp.Range(func(k protoreflect.MapKey, v protoreflect.Value) bool {
 		// different type of value
 		if fd.MapValue().Kind() == protoreflect.MessageKind {
-			val, err := marshalMessage(v.Message().Interface())
+			val, err := marshalMessage(v.Message().Interface(), options)
 			if err != nil {
 				mapError = err
 				return false
@@ -104,13 +118,13 @@ func marshalMap(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.M
 	return value, mapError
 }
 
-func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message) ([]any, error) {
+func marshalList(fd protoreflect.FieldDescriptor, reflectedMessage protoreflect.Message, options *marshalOptions) ([]any, error) {
 	list := reflectedMessage.Get(fd).List()
 	listValue := make([]any, list.Len())
 	for i := 0; i < list.Len(); i++ {
 		item := list.Get(i)
 		if fd.Kind() == protoreflect.MessageKind {
-			nestedValue, err := marshalMessage(item.Message().Interface())
+			nestedValue, err := marshalMessage(item.Message().Interface(), options)
 			if err != nil {
 				return nil, err
 			}
