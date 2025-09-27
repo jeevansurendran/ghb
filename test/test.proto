@@ -10,4 +10,5 @@ message TestUser {
     string name = 2;
     int32 age = 3;
     google.protobuf.Timestamp created_at = 4;
+    repeated string emails = 5;
 }

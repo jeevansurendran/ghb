@@ -123,6 +123,20 @@ func Test_unmarshalBytes(t *testing.T) {
 				CreatedAt: timestamppb.New(time.Unix(1758454323, 0)),
 			},
 		},
+		{
+			name:  "support for different type of inputs",
+			bytes: []byte(`{"id": "123", "name": "John Doe", "age": 30, "created_at": "2025-09-21T11:32:03.000Z", "emails": ["user.1@gmail.com", "user.2@gmail.com", "user3@gmail.com"]}`),
+			options: &unmarshalOptions{
+				timeFormat: ISOTimeFormat,
+			},
+			expected: &test.TestUser{
+				Id:        "123", // should be overridden by the param.
+				Name:      "John Doe",
+				Age:       30,
+				CreatedAt: timestamppb.New(time.Unix(1758454323, 0)),
+				Emails:    []string{"user.1@gmail.com", "user.2@gmail.com", "user3@gmail.com"},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
