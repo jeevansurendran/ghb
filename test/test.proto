@@ -23,7 +23,6 @@ message Address {
     
 }
 
-
 message City {
     string name = 1;
     int32 pincode = 2;
